@@ -10,6 +10,23 @@ description: Diagnose and recover AnyDesk on a remote Linux desktop over SSH whe
 Run a narrow, deterministic recovery workflow for Linux hosts where AnyDesk is online but unusable.
 Prioritize X11 session type, service state, and frontend attachment before treating network issues as the primary cause.
 
+## High-Impact Boundary
+
+Default to low-impact diagnosis first.
+Do not mix high-impact actions into ordinary troubleshooting output.
+
+High-impact actions for this skill include:
+
+- rebooting or shutting down the remote host
+- editing `gdm3`, display-manager, login-manager, or session-manager config
+- switching between `Wayland` and `Xorg` / `X11`
+- firewall mutations
+- package removal or reinstall
+
+If the host is on `Wayland`, stop at read-only confirmation and explain that the current X11-targeted recovery path is not applicable.
+Do not provide config-edit or reboot commands unless the user explicitly approves that class of action.
+If the user later explicitly approves a high-impact path, present it as a separate approved-action block rather than blending it into the baseline diagnosis flow.
+
 ## Baseline Checks
 
 SSH into the Linux host as the desktop owner and run:
@@ -25,7 +42,7 @@ sudo ufw status verbose
 
 Interpret the results in this order:
 
-- If the active GUI session is `Type=wayland`, do not use this skill as the primary fix path. Switch to Xorg first.
+- If the active GUI session is `Type=wayland`, do not use this skill as the primary fix path. Stop at read-only confirmation, report that the current recovery path requires `X11`, and wait for explicit user approval before suggesting any `Xorg` / config-change / reboot actions.
 - If `ufw` is inactive and `anydesk.service` is active, do not treat firewall or basic service availability as the primary cause.
 - If `--service` is alive but `--frontend` and `--backend` are missing, unstable, or return `desk_rt_ipc_error`, treat the issue as a frontend attachment failure.
 
@@ -34,8 +51,17 @@ Interpret the results in this order:
 Use the bundled script when the host is reachable over SSH and the active desktop session is X11:
 
 ```bash
-bash $CODEX_HOME/skills/anydesk-connect/scripts/revive_anydesk_session.sh
+bash /Users/andyl/.codex/skills/anydesk-connect/scripts/revive_anydesk_session.sh
 ```
+
+When launching the recovery from the local Mac, prefer the bundled local wrapper:
+
+```bash
+bash /Users/andyl/.codex/skills/anydesk-connect/scripts/run_remote_repair.sh andy7
+```
+
+The wrapper expects a narrow passwordless sudo rule for restarting AnyDesk only, such as allowing `/usr/bin/systemctl restart anydesk`.
+Do not require or configure broad passwordless sudo.
 
 The script:
 
@@ -45,12 +71,14 @@ The script:
 - Relaunches AnyDesk into the active desktop session
 - Prints current AnyDesk processes and the tail of `/tmp/anydesk-launch.log`
 
+Do not suggest this recovery path until `X11` has already been confirmed through low-impact checks.
+
 ## Manual Fallback
 
 If the script needs environment-specific adjustment, run the equivalent sequence manually:
 
 ```bash
-sudo systemctl restart anydesk
+sudo -n systemctl restart anydesk
 pkill -u "$(id -un)" -f '/usr/bin/anydesk --frontend|/usr/bin/anydesk --backend|/usr/bin/anydesk --tray|^anydesk$' || true
 export DISPLAY=:0
 export XAUTHORITY="$HOME/.Xauthority"
@@ -87,3 +115,5 @@ Only escalate toward reinstall or an alternative remote desktop stack after:
 1. X11 is confirmed.
 2. `ufw` is ruled out.
 3. The recovery script has been attempted from SSH as the desktop owner.
+
+If a future step would require reboot, session-stack changes, package changes, or display-manager edits, stop and ask for explicit approval for that high-impact class of action first.

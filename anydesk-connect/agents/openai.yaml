@@ -1,0 +1,4 @@
+interface:
+  display_name: "AnyDesk Connect"
+  short_description: "Recover AnyDesk on Linux X11 over SSH"
+  default_prompt: "Use this skill to diagnose and recover AnyDesk on a remote Linux X11 desktop when the client shows online but the connection times out, ends unexpectedly, or returns desk_rt_ipc_error."
