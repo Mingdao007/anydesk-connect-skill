@@ -10,6 +10,14 @@ description: Diagnose and recover AnyDesk on a remote Linux desktop over SSH whe
 Run a narrow, deterministic recovery workflow for Linux hosts where AnyDesk is online but unusable.
 Prioritize X11 session type, service state, and frontend attachment before treating network issues as the primary cause.
 
+## Completion Gate
+
+Do not mark the repair as complete from SSH diagnostics, AnyDesk logs, process state, port reachability, or an online/green status alone.
+Those checks are only intermediate evidence.
+
+The workflow passes only after Codex manually uses Computer Use to start the real AnyDesk connection to the target computer and confirms that the remote desktop is visible and interactive.
+If Computer Use is unavailable, the AnyDesk UI cannot be operated, authentication blocks the connection, or the connection cannot be visually confirmed, report the state as `recovered but unverified` or `not verified`, not as fixed.
+
 ## High-Impact Boundary
 
 Default to low-impact diagnosis first.
