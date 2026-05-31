@@ -18,6 +18,21 @@ Those checks are only intermediate evidence.
 The workflow passes only after Codex manually uses Computer Use to start the real AnyDesk connection to the target computer and confirms that the remote desktop is visible and interactive.
 If Computer Use is unavailable, the AnyDesk UI cannot be operated, authentication blocks the connection, or the connection cannot be visually confirmed, report the state as `recovered but unverified` or `not verified`, not as fixed.
 
+## Recovery Loop
+
+`recovered but unverified` is not a stopping state when more low-risk checks remain.
+If Computer Use cannot operate the local AnyDesk UI, keep troubleshooting the local verification path before returning.
+
+Use this ordered loop:
+
+1. Confirm the remote host remains reachable over SSH or Tailscale and the remote AnyDesk listener is still present.
+2. Confirm the local Mac AnyDesk service, frontend process, visible windows, menu/status item, and recent Mac AnyDesk logs.
+3. Try low-risk ways to surface a usable local AnyDesk UI: activate the app, reopen the app, use the AnyDesk URL scheme, inspect menu-bar or Dock-accessible windows, and capture the screen to verify what is visible.
+4. Once the local UI is visible, use Computer Use to start the connection and visually confirm the remote desktop.
+5. Stop only at a concrete boundary: Computer Use cannot see or operate any AnyDesk UI after targeted attempts, macOS/AnyDesk permissions require a user action, authentication requires user-only credentials, or the next step is a high-impact system change.
+
+When stopping at a boundary, state the exact boundary and the next action that would move verification forward.
+
 ## High-Impact Boundary
 
 Default to low-impact diagnosis first.
