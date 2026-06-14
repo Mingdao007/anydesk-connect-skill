@@ -1,6 +1,6 @@
 ---
 name: anydesk-connect
-description: Diagnose and recover AnyDesk on a remote Linux desktop over SSH when the client shows online but the connection times out, ends unexpectedly, or returns desk_rt_ipc_error. Use when SSH or Tailscale reaches the host, anydesk.service is running, and the likely failure is that the AnyDesk frontend is not attached to the active X11 desktop session.
+description: "Diagnose and recover AnyDesk on a remote Linux desktop over SSH when the client shows online but the connection times out, ends unexpectedly, returns desk_rt_ipc_error, or the user's recurring andy7 AnyDesk connection fails. Use for the default andy7 flow: restart AnyDesk service, clean stale user-side AnyDesk processes, reattach to the active X11 session, and verify real incoming/session evidence before calling it fixed."
 ---
 
 # Anydesk Connect
@@ -8,22 +8,30 @@ description: Diagnose and recover AnyDesk on a remote Linux desktop over SSH whe
 ## Overview
 
 Run a narrow, deterministic recovery workflow for Linux hosts where AnyDesk is online but unusable.
-Prioritize X11 session type, service state, and frontend attachment before treating network issues as the primary cause.
+For the recurring `andy7` issue, default to the remote repair wrapper first.
+Prioritize X11 session type, service restart, stale user-side process cleanup, and X11 frontend reattachment before treating Mac UI or network issues as the primary cause.
 
 ## Completion Gate
 
 For the user's recurring `andy7` AnyDesk issue, the specific recovery workflow is the default completion path.
 Do not start by probing the local Mac AnyDesk UI or requiring Computer Use visual confirmation.
 
-The workflow passes when all of these are true:
+The repair phase passes when all of these are true:
 
 - the host is reachable over SSH or Tailscale
 - the active local desktop session is `Type=x11`
 - the bundled repair or equivalent manual sequence restarts `anydesk.service`
-- user-side AnyDesk processes are cleared and relaunched with the active desktop `DISPLAY`, `XAUTHORITY`, and `DBUS_SESSION_BUS_ADDRESS`
-- post-repair checks show `anydesk.service`, a user-side `anydesk` process, `anydesk --tray`, and the AnyDesk listener present
+- every stale user-side process with command name `anydesk` is terminated with `TERM`, then `KILL` if still present
+- AnyDesk is relaunched with the active desktop `DISPLAY`, `XAUTHORITY`, and `DBUS_SESSION_BUS_ADDRESS`
+- post-repair checks show `anydesk.service`, `anydesk --tray`, a user-side frontend `anydesk`, `anydesk --get-status=online`, and the AnyDesk listener on `7070`
 
-If the user still cannot connect after this specific workflow, then escalate to the general remote-desktop verification path, including local Mac UI inspection and Computer Use visual confirmation when feasible.
+Do not describe the problem as fixed after process/listener checks alone.
+Say only that remote repair is complete.
+The connection passes only when remote evidence shows an incoming/session from the Mac client, such as `Accept request from <Mac ID>`, `Authenticated with permanent token`, and `Entering processing loop`, or when the user/screenshot confirms the remote desktop is visible.
+
+If the user still cannot connect after remote repair, do not restart broad diagnosis.
+Check `/etc/anydesk/connection_trace.txt` and `/var/log/anydesk.trace` for the Mac AnyDesk ID first.
+Only inspect the local Mac AnyDesk UI after this remote trace check fails to show an outgoing/incoming attempt or the user explicitly reports the Mac UI cannot open.
 
 ## Recovery Loop
 
@@ -36,8 +44,10 @@ Use this ordered loop:
 1. Confirm the remote host remains reachable over SSH or Tailscale.
 2. Confirm the active desktop session is `Type=x11`; if it is `Wayland`, stop at the high-impact boundary.
 3. Run the bundled remote repair wrapper from the local Mac, or the equivalent manual recovery sequence over SSH.
-4. Confirm post-repair remote evidence: `anydesk.service` is active, user-side `anydesk` and `anydesk --tray` are present, and the AnyDesk listener is present.
-5. If the user still reports failure after the specific repair, then continue with the common troubleshooting-to-boundary path: inspect local Mac AnyDesk UI, use Computer Use when feasible, collect logs, or stop at the first concrete user-only or high-impact boundary.
+4. Treat `REMOTE_REPAIRED` as remote-side readiness only, not proof of a usable client session.
+5. Confirm post-repair remote evidence: `anydesk.service` is active, `anydesk --get-status` is `online`, user-side `anydesk` and `anydesk --tray` are present, and listener `7070` is present.
+6. If the user still reports failure, check remote traces for the Mac AnyDesk ID before looking at Mac UI.
+7. Treat `REMOTE_SESSION_SEEN` or matching remote log lines as the real connection gate; if absent, state that no real client session reached the remote host.
 
 When stopping at a boundary, state the exact boundary and the next action that would move verification forward.
 
@@ -75,7 +85,7 @@ Interpret the results in this order:
 
 - If the active GUI session is `Type=wayland`, do not use this skill as the primary fix path. Stop at read-only confirmation, report that the current recovery path requires `X11`, and wait for explicit user approval before suggesting any `Xorg` / config-change / reboot actions.
 - If `ufw` is inactive and `anydesk.service` is active, do not treat firewall or basic service availability as the primary cause.
-- If `--service` is alive but `--frontend` and `--backend` are missing, unstable, or return `desk_rt_ipc_error`, treat the issue as a frontend attachment failure.
+- If `--service` is alive but frontend/tray/backend state is stale, duplicated, missing, unstable, or returns `desk_rt_ipc_error`, treat the issue as a stale user-side AnyDesk attachment failure.
 
 ## Primary Recovery
 
@@ -99,10 +109,11 @@ Do not require or configure broad passwordless sudo.
 The script:
 
 - Restarts `anydesk.service`
-- Clears only AnyDesk-related user-side processes
+- Clears all user-side processes whose command name is exactly `anydesk`
 - Re-exports `DISPLAY`, `XAUTHORITY`, and `DBUS_SESSION_BUS_ADDRESS`
 - Relaunches AnyDesk into the active desktop session
-- Prints current AnyDesk processes and the tail of `/tmp/anydesk-launch.log`
+- Prints `REMOTE_REPAIRED` only after remote service, tray, frontend, online status, and listener checks pass
+- Lets the wrapper print `REMOTE_SESSION_SEEN` only after remote trace evidence includes the Mac AnyDesk ID
 
 Do not suggest this recovery path until `X11` has already been confirmed through low-impact checks.
 
@@ -112,13 +123,17 @@ If the script needs environment-specific adjustment, run the equivalent sequence
 
 ```bash
 sudo -n systemctl restart anydesk
-pkill -u "$(id -un)" -f '/usr/bin/anydesk --frontend|/usr/bin/anydesk --backend|/usr/bin/anydesk --tray|^anydesk$' || true
+pgrep -u "$(id -u)" -x anydesk | xargs -r kill
+sleep 2
+pgrep -u "$(id -u)" -x anydesk | xargs -r kill -9
+sudo -n systemctl restart anydesk
 export DISPLAY=:0
-export XAUTHORITY="$HOME/.Xauthority"
+export XAUTHORITY="/run/user/$(id -u)/gdm/Xauthority"
 export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
-nohup anydesk >/tmp/anydesk-launch.log 2>&1 &
-sleep 3
-pgrep -af anydesk
+nohup /usr/bin/anydesk >/tmp/anydesk-launch.log 2>&1 &
+sleep 6
+ps -eo user:12,pid,ppid,stat,lstart,args | grep -i "[a]nydesk"
+anydesk --get-status
 tail -n 40 /tmp/anydesk-launch.log
 ```
 
@@ -127,11 +142,13 @@ Expect at least:
 - `anydesk --service`
 - `anydesk --tray`
 - a user-side `anydesk` process that stays alive long enough for the client to reconnect
+- listener `7070`
 
 ## Keep Network Diagnosis Secondary
 
 Do not treat a green online dot as proof that an AnyDesk session can be established.
 If SSH or Tailscale reaches the host and this recovery fixes the problem, record the issue as a desktop-session attachment failure rather than a primary NAT, firewall, or VPN fault.
+Do not treat remote process evidence alone as proof of a working client connection.
 
 ## Escalation Data
 
@@ -141,6 +158,8 @@ If the recovery does not restore access, collect:
 anydesk --version
 journalctl -u anydesk -n 120 --no-pager
 tail -n 100 /tmp/anydesk-launch.log
+tail -n 40 /etc/anydesk/connection_trace.txt
+tail -n 300 /var/log/anydesk.trace | grep -Ei 'Accept request|Authenticated|Entering processing loop|Client-ID|session|error|fail'
 ```
 
 Only escalate toward reinstall or an alternative remote desktop stack after:
