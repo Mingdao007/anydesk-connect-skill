@@ -54,14 +54,15 @@ echo "== optional session check: waiting up to ${session_wait_seconds}s for inco
 deadline=$((SECONDS + session_wait_seconds))
 while (( SECONDS <= deadline )); do
   if ssh "$host" \
-    "{
-       tail -n +$((remote_conn_start + 1)) /etc/anydesk/connection_trace.txt 2>/dev/null || true
-       tail -n +$((remote_log_start + 1)) /var/log/anydesk.trace 2>/dev/null || true
-     } | grep -F '$local_id' >/dev/null"; then
-    echo "REMOTE_SESSION_SEEN: remote trace saw Mac AnyDesk ID $local_id."
+    "log_slice=\$(tail -n +$((remote_log_start + 1)) /var/log/anydesk.trace 2>/dev/null || true)
+     printf '%s\n' \"\$log_slice\" | grep -F 'Accept request from $local_id' >/dev/null &&
+     printf '%s\n' \"\$log_slice\" | grep -F 'Client-ID: $local_id' >/dev/null &&
+     printf '%s\n' \"\$log_slice\" | grep -F 'Authenticated with permanent token' >/dev/null &&
+     printf '%s\n' \"\$log_slice\" | grep -F 'Entering processing loop' >/dev/null"; then
+    echo "REMOTE_SESSION_SEEN: remote trace saw Accept request, Client-ID, token authentication, and processing loop for Mac AnyDesk ID $local_id."
     exit 0
   fi
   sleep 2
 done
 
-echo "REMOTE_SESSION_NOT_SEEN: no incoming/session trace from Mac AnyDesk ID $local_id during the wait window."
+echo "REMOTE_SESSION_NOT_SEEN: remote trace did not show the full Accept request, Client-ID, token authentication, and processing loop sequence for Mac AnyDesk ID $local_id during the wait window."

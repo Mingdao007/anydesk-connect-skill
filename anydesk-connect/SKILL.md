@@ -27,7 +27,7 @@ The repair phase passes when all of these are true:
 
 Do not describe the problem as fixed after process/listener checks alone.
 Say only that remote repair is complete.
-The connection passes only when remote evidence shows an incoming/session from the Mac client, such as `Accept request from <Mac ID>`, `Authenticated with permanent token`, and `Entering processing loop`, or when the user/screenshot confirms the remote desktop is visible.
+The connection passes only when remote evidence shows the full session sequence from the Mac client: `Accept request from <Mac ID>`, `Client-ID: <Mac ID>`, `Authenticated with permanent token`, and `Entering processing loop`, or when the user/screenshot confirms the remote desktop is visible.
 
 If the user still cannot connect after remote repair, do not restart broad diagnosis.
 Check `/etc/anydesk/connection_trace.txt` and `/var/log/anydesk.trace` for the Mac AnyDesk ID first.
@@ -47,7 +47,7 @@ Use this ordered loop:
 4. Treat `REMOTE_REPAIRED` as remote-side readiness only, not proof of a usable client session.
 5. Confirm post-repair remote evidence: `anydesk.service` is active, `anydesk --get-status` is `online`, user-side `anydesk` and `anydesk --tray` are present, and listener `7070` is present.
 6. If the user still reports failure, check remote traces for the Mac AnyDesk ID before looking at Mac UI.
-7. Treat `REMOTE_SESSION_SEEN` or matching remote log lines as the real connection gate; if absent, state that no real client session reached the remote host.
+7. Treat `REMOTE_SESSION_SEEN` or the full matching remote log sequence as the real connection gate; if absent, state that no verified client session completed on the remote host.
 
 When stopping at a boundary, state the exact boundary and the next action that would move verification forward.
 
@@ -113,7 +113,7 @@ The script:
 - Re-exports `DISPLAY`, `XAUTHORITY`, and `DBUS_SESSION_BUS_ADDRESS`
 - Relaunches AnyDesk into the active desktop session
 - Prints `REMOTE_REPAIRED` only after remote service, tray, frontend, online status, and listener checks pass
-- Lets the wrapper print `REMOTE_SESSION_SEEN` only after remote trace evidence includes the Mac AnyDesk ID
+- Lets the wrapper print `REMOTE_SESSION_SEEN` only after remote trace evidence includes `Accept request from <Mac ID>`, `Client-ID: <Mac ID>`, `Authenticated with permanent token`, and `Entering processing loop`
 
 Do not suggest this recovery path until `X11` has already been confirmed through low-impact checks.
 
@@ -159,7 +159,7 @@ anydesk --version
 journalctl -u anydesk -n 120 --no-pager
 tail -n 100 /tmp/anydesk-launch.log
 tail -n 40 /etc/anydesk/connection_trace.txt
-tail -n 300 /var/log/anydesk.trace | grep -Ei 'Accept request|Authenticated|Entering processing loop|Client-ID|session|error|fail'
+tail -n 300 /var/log/anydesk.trace | grep -Ei 'Accept request|Client-ID|Authenticated|Entering processing loop|session|error|fail'
 ```
 
 Only escalate toward reinstall or an alternative remote desktop stack after:
