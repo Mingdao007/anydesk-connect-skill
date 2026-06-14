@@ -79,16 +79,18 @@ Interpret the results in this order:
 
 ## Primary Recovery
 
-Use the bundled script when the host is reachable over SSH and the active desktop session is X11:
+From this skill directory, use the bundled script when the host is reachable
+over SSH and the active desktop session is X11:
 
 ```bash
-bash /Users/andyl/.codex/skills/anydesk-connect/scripts/revive_anydesk_session.sh
+bash scripts/revive_anydesk_session.sh
 ```
 
-When launching the recovery from the local Mac, prefer the bundled local wrapper:
+When launching the recovery from the local Mac, prefer the bundled local
+wrapper from this skill directory:
 
 ```bash
-bash /Users/andyl/.codex/skills/anydesk-connect/scripts/run_remote_repair.sh andy7
+bash scripts/run_remote_repair.sh andy7
 ```
 
 The wrapper expects a narrow passwordless sudo rule for restarting AnyDesk only, such as allowing `/usr/bin/systemctl restart anydesk`.
